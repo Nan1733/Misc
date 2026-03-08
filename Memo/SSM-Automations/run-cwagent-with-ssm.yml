@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "0.3",
+  "description": "入力されたJSONからアドバンスドティアのSSMパラメータを作成し、CloudWatch Agentに設定(fetch, append, remove)を適用します。",
+  "parameters": {
+    "InstanceId": {
+      "type": "AWS::EC2::Instance::Id",
+      "description": "対象のEC2インスタンスを指定します（コンソール上ではプルダウンから選択可能です）。"
+    },
+    "ConfigName": {
+      "type": "String",
+      "description": "作成・更新するSSMパラメータの名前を指定します（例: AmazonCloudWatch-CustomConfig）。"
+    },
+    "ConfigJson": {
+      "type": "String",
+      "description": "CloudWatch Agent用の設定JSONを直接入力します。"
+    },
+    "Action": {
+      "type": "String",
+      "default": "configure",
+      "allowedValues": [
+        "configure",
+        "configure (append)",
+        "configure (remove)"
+      ],
+      "description": "CloudWatch Agentに実行させるアクション（上書き、追記、削除）を指定します。"
+    },
+    "Mode": {
+      "type": "String",
+      "default": "ec2",
+      "allowedValues": [
+        "ec2",
+        "onPremise",
+        "auto"
+      ]
+    },
+    "OptionalRestart": {
+      "type": "String",
+      "default": "yes",
+      "allowedValues": [
+        "yes",
+        "no"
+      ]
+    }
+  },
+  "mainSteps": [
+    {
+      "name": "CreateOrUpdateSSMParameter",
+      "action": "aws:executeAwsApi",
+      "description": "受け取ったJSONをアドバンスドティアのSSMパラメータとして保存・上書きします。",
+      "inputs": {
+        "Service": "ssm",
+        "Api": "PutParameter",
+        "Name": "{{ConfigName}}",
+        "Value": "{{ConfigJson}}",
+        "Type": "String",
+        "Tier": "Advanced",
+        "Overwrite": true
+      }
+    },
+    {
+      "name": "ApplyCloudWatchConfig",
+      "action": "aws:runCommand",
+      "description": "AWS管理のRunbookを呼び出し、作成したパラメータを使用してAgentの設定と再起動を行います。",
+      "inputs": {
+        "DocumentName": "AmazonCloudWatch-ManageAgent",
+        "InstanceIds": [
+          "{{InstanceId}}"
+        ],
+        "Parameters": {
+          "action": "{{Action}}",
+          "mode": "{{Mode}}",
+          "optionalConfigurationSource": "ssm",
+          "optionalConfigurationLocation": "{{ConfigName}}",
+          "optionalRestart": "{{OptionalRestart}}"
+        }
+      }
+    }
+  ]
+}
